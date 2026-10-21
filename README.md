@@ -56,6 +56,11 @@ crates/kp_relay  service du Raspberry Pi (ki-plotter-relay)
 deploy/raspberry-pi  service systemd, configuration, installation sur le Pi
 ```
 
+## Licence
+
+[GPL-3.0](LICENSE) : libre d'utiliser, d'étudier et de modifier le logiciel ; les versions
+modifiées qui sont distribuées doivent rester sous GPL-3.0, avec leur code source.
+
 ## Plotter dans une autre pièce : relais Raspberry Pi
 
 Un Raspberry Pi (2 à 5) reste branché en USB au plotter et reçoit les découpes par le

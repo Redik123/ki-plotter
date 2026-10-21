@@ -2,6 +2,7 @@
 name = "kp_import"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 description = "Importers for KI Plotter: system fonts and text outlines, SVG, DXF, PLT, bitmap tracing"
 
 [dependencies]

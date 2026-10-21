@@ -31,5 +31,6 @@ for f in install.sh ki-plotter-relay.service ki-plotter-relay.conf LISEZMOI.md; 
   # Unix line endings whatever the checkout did: a CRLF install.sh fails on the Pi.
   sed 's/\r$//' "deploy/raspberry-pi/$f" > "$out/$f"
 done
+cp LICENSE "$out/LICENSE"
 chmod +x "$out/install.sh" "$out"/ki-plotter-relay-*
 echo "Prêt : $out"

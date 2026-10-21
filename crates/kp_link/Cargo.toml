@@ -2,6 +2,7 @@
 name = "kp_link"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 description = "Sends cut jobs to the cutter: serial port, Windows printer (RAW), file, KI Plotter relay (Raspberry Pi). Shared with the relay itself."
 
 [dependencies]

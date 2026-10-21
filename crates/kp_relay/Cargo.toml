@@ -2,6 +2,7 @@
 name = "kp_relay"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 description = "KI Plotter relay: runs on the Raspberry Pi wired to the cutter and receives cut jobs over the network"
 
 [[bin]]
