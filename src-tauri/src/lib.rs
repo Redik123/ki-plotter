@@ -13,7 +13,7 @@ use kp_import::{FontInfo, ImageInfo, Imported, TextOutline, TextRequest, TraceRe
 use kp_link::relay::{self, RelayInfo, RelayStatus};
 use kp_link::{Destination, JobInfo, PortInfo, SendOptions, SendOutcome};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Runs blocking work on Tauri's thread pool.
 async fn blocking<T: Send + 'static>(
@@ -102,6 +102,47 @@ async fn write_text_file(path: PathBuf, contents: String) -> Result<(), String> 
     blocking(move || {
         std::fs::write(&path, contents)
             .map_err(|e| format!("Impossible d'écrire « {} » : {e}", path.display()))
+    })
+    .await
+}
+
+// ---- rolls inventory
+
+fn rolls_file(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Dossier de données introuvable : {e}"))?;
+    Ok(dir.join("rouleaux.json"))
+}
+
+/// The rolls (shared by every project), or None before the first save.
+#[tauri::command]
+async fn load_rolls(app: AppHandle) -> Result<Option<String>, String> {
+    let path = rolls_file(&app)?;
+    blocking(move || match std::fs::read_to_string(&path) {
+        Ok(s) => Ok(Some(s)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("Impossible de lire les rouleaux : {e}")),
+    })
+    .await
+}
+
+/// Writes the rolls; the previous file is kept as `rouleaux.json.bak`.
+#[tauri::command]
+async fn save_rolls(app: AppHandle, contents: String) -> Result<(), String> {
+    let path = rolls_file(&app)?;
+    blocking(move || {
+        let fail = |e: std::io::Error| format!("Impossible d'enregistrer les rouleaux : {e}");
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir).map_err(fail)?;
+        }
+        if path.exists() {
+            let _ = std::fs::copy(&path, path.with_extension("json.bak"));
+        }
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, contents).map_err(fail)?;
+        std::fs::rename(&tmp, &path).map_err(fail)
     })
     .await
 }
@@ -217,6 +258,8 @@ pub fn run() {
             list_printers,
             discover_relays,
             relay_status,
+            load_rolls,
+            save_rolls,
             read_text_file,
             write_text_file,
             send_job,

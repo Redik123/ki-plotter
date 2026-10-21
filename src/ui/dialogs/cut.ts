@@ -5,6 +5,7 @@ import { toShape, type Store } from "../../model/doc";
 import { IDENTITY, mul, rectPath, scaleAt } from "../../model/geom";
 import type { Destination, JobResult, Move, PortInfo, Rect, RelayInfo, Shape } from "../../model/types";
 import { DEFAULT_SETTINGS, persist, settings, type OutputKind } from "../../settings";
+import { fmtMeters, rolls } from "../../model/rolls";
 import { fmtMm } from "../actions";
 import { checkbox, errorMessage, h, modal, numberField, select, toast } from "../dom";
 
@@ -73,6 +74,10 @@ export function openCutDialog(store: Store): void {
 
   const canvas = h("canvas", { class: "cut-preview" });
   const stats = h("div", { class: "cut-stats" }, "Préparation…");
+  const rollLine = h("div", { class: "cut-stats" }, "");
+  const roll = rolls.current();
+  // A .plt file may be cut elsewhere: don't count it on the roll by default.
+  let countOnRoll = !!roll && s.output.kind !== "file";
   const scrub = h("input", { type: "range", min: 0, max: 1000, value: 1000 });
   const playBtn = h("button", { class: "icon", title: "Simuler la découpe" }, "▶");
   const speedSel = select<string>(null, [["1", "×1"], ["4", "×4"], ["16", "×16"], ["64", "×64"]], "16", () => {}).select;
@@ -273,6 +278,7 @@ export function openCutDialog(store: Store): void {
           `${fmtMm(st.bounds.w)} × ${fmtMm(st.bounds.h)} mm`;
         stats.classList.toggle("warn", st.bounds.h > store.doc.mediaWidth);
         if (st.bounds.h > store.doc.mediaWidth) stats.textContent += " — plus large que la laize !";
+        updateRollLine();
         sendBtn.disabled = sending;
       } catch (e) {
         job = null;
@@ -282,6 +288,19 @@ export function openCutDialog(store: Store): void {
       draw();
     }, 120);
   };
+
+  /** What is left on the roll in place, and after this job. */
+  function updateRollLine(): void {
+    rollLine.hidden = !roll;
+    if (!roll || !job) return;
+    const left = rolls.remaining(roll);
+    const need = rolls.footprint(job, s.cut.fromOrigin);
+    const short = need > left;
+    rollLine.classList.toggle("warn", short);
+    rollLine.textContent = short
+      ? `⚠ Il ne reste qu'environ ${fmtMeters(left)} sur « ${roll.name} », ce travail en demande ${fmtMeters(need)}.`
+      : `Rouleau « ${roll.name} » : reste ≈ ${fmtMeters(left)}, ≈ ${fmtMeters(left - need)} après ce travail.`;
+  }
 
   // ---- settings form
 
@@ -341,6 +360,10 @@ export function openCutDialog(store: Store): void {
     chk("Miroir (flex thermocollant)", () => s.cut.mirror, (v) => (s.cut.mirror = v)),
     chk("Partir de l'origine du plotter", () => s.cut.fromOrigin, (v) => (s.cut.fromOrigin = v),
       "Coché : le dessin commence là où la lame a été placée. Décoché : la position sur la laize est respectée."),
+    roll
+      ? checkbox(`Compter sur le rouleau « ${roll.name} »`, countOnRoll, (v) => (countOnRoll = v),
+          "Après l'envoi, la découpe s'ajoute à l'historique du rouleau et sa longueur est déduite.")
+      : null,
   );
 
   // Output.
@@ -632,6 +655,16 @@ export function openCutDialog(store: Store): void {
       if (!path) return;
       destination = { kind: "file", path };
     }
+    // What to record on the roll if the send succeeds.
+    const sentJob = job;
+    const sentName = jobName();
+    const fromOrigin = s.cut.fromOrigin;
+    const recordOnRoll = () => {
+      if (!countOnRoll || !rolls.current()) return "";
+      rolls.record(sentJob, sentName, fromOrigin);
+      const r = rolls.current()!;
+      return ` Reste ≈ ${fmtMeters(rolls.remaining(r))} sur « ${r.name} ».`;
+    };
     sending = true;
     sendBtn.disabled = true;
     saveBtn.disabled = true;
@@ -653,15 +686,16 @@ export function openCutDialog(store: Store): void {
       if (f.queued) {
         progress.value = 1;
         progressText.textContent = "En attente sur le Pi ✓";
+        const left = recordOnRoll();
         toast(
-          f.position > 1
+          (f.position > 1
             ? `Travail en attente sur le Pi (${f.position} dans la file). Lancez la découpe depuis son écran.`
-            : "Travail en attente sur le Pi. Lancez la découpe depuis son écran, une fois le vinyle en place.",
+            : "Travail en attente sur le Pi. Lancez la découpe depuis son écran, une fois le vinyle en place.") + left,
         );
       } else if (f.ok) {
         progress.value = 1;
         progressText.textContent = "Envoyé ✓";
-        toast("Travail envoyé au plotter.");
+        toast(`Travail envoyé au plotter.${recordOnRoll()}`);
       } else if (f.cancelled) {
         progressText.textContent = "Arrêté";
         toast("Envoi arrêté. Le plotter peut finir ce qu'il a déjà reçu.");
@@ -700,7 +734,7 @@ export function openCutDialog(store: Store): void {
   const body = h(
     "div",
     { class: "cut-layout" },
-    h("div", { class: "cut-left" }, canvas, h("div", { class: "sim-row" }, playBtn, scrub, speedSel), stats),
+    h("div", { class: "cut-left" }, canvas, h("div", { class: "sim-row" }, playBtn, scrub, speedSel), stats, rollLine),
     h("div", { class: "cut-right" }, what, blade, options, output, machine),
   );
   const footer = h(

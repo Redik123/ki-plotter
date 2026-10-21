@@ -49,6 +49,9 @@ export const backend = {
   relayStatus: (host: string, port: number) => call<RelayStatus>("relay_status", { host, port }),
   sendJob: (req: SendRequest) => call<void>("send_job", { req }),
   cancelJob: () => call<void>("cancel_job"),
+  loadRolls: (): Promise<string | null> => (inTauri ? call<string | null>("load_rolls") : Promise.resolve(mockStorage.get())),
+  saveRolls: (contents: string): Promise<void> =>
+    inTauri ? call<void>("save_rolls", { contents }) : Promise.resolve(mockStorage.set(contents)),
   readTextFile: (path: string) => call<string>("read_text_file", { path }),
   writeTextFile: (path: string, contents: string) => call<void>("write_text_file", { path, contents }),
 };
@@ -116,6 +119,24 @@ export function setToastHook(fn: (msg: string) => void): void {
 }
 
 // ---------------------------------------------------------------- mock
+
+/** Browser mode: the rolls live in localStorage. */
+const mockStorage = {
+  get(): string | null {
+    try {
+      return localStorage.getItem("ki-plotter.rolls");
+    } catch {
+      return null;
+    }
+  },
+  set(v: string): void {
+    try {
+      localStorage.setItem("ki-plotter.rolls", v);
+    } catch {
+      // Not fatal in the browser preview.
+    }
+  },
+};
 
 const mockBus = {
   progress: [] as ((p: JobProgress) => void)[],

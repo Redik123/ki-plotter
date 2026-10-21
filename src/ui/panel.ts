@@ -5,6 +5,8 @@ import { angleOf, scaleAt, translate } from "../model/geom";
 import type { Align } from "../model/types";
 import type { Actions } from "./actions";
 import type { CanvasView } from "./canvas";
+import { fmtMeters, rolls } from "../model/rolls";
+import { openRollDialog } from "./dialogs/roll";
 import { checkbox, h, numberField, round, select } from "./dom";
 import { families, fontById, fontName, refreshText, regularOf, rememberFont, stylesOf } from "./text";
 
@@ -35,6 +37,10 @@ export class SidePanel {
     store.on((k) => {
       if (k === "selection") this.build();
       else if (k === "doc") this.refresh();
+    });
+    // The roll summary lives in the "nothing selected" view.
+    rolls.on(() => {
+      if (this.store.selection.length === 0) this.build();
     });
     this.build();
   }
@@ -67,6 +73,63 @@ export class SidePanel {
   }
 
   private documentSection(): HTMLElement {
+    const roll = rolls.current();
+    const pick = h(
+      "select",
+      { title: "Le rouleau chargé dans le plotter" },
+      h("option", { value: "", selected: !roll }, "Aucun (laize libre)"),
+      ...rolls.data.rolls.map((r) =>
+        h("option", { value: r.id, selected: r.id === roll?.id }, `${r.name} — reste ${fmtMeters(rolls.remaining(r))}`),
+      ),
+    );
+    pick.addEventListener("change", () => rolls.setCurrent(pick.value || null));
+    const head = h("label", { class: "field" }, h("span", {}, "Rouleau"), pick);
+    if (!roll) {
+      return this.section(
+        "Support",
+        head,
+        ...this.mediaWidthRows(),
+        h("div", { class: "btn-row" }, h("button", { onclick: () => openRollDialog() }, "Nouveau rouleau…")),
+        h(
+          "p",
+          { class: "hint" },
+          "Créez un rouleau (ex. « Feuille 1 », 700 mm × 10 m) pour voir ses anciennes découpes et ce qui reste.",
+        ),
+      );
+    }
+    const rem = rolls.remaining(roll);
+    const n = roll.cuts.length;
+    return this.section(
+      "Rouleau en place",
+      head,
+      h(
+        "div",
+        { class: "roll-card" },
+        h("i", { class: "roll-swatch", style: `background:${roll.color}` }),
+        h(
+          "div",
+          { class: "roll-info" },
+          h("b", {}, roll.name),
+          h("span", {}, `${roll.width} mm × ${fmtMeters(roll.length)} · ${n} découpe${n > 1 ? "s" : ""}`),
+          h("div", { class: "roll-bar" }, h("i", { style: `transform: scaleX(${roll.length ? rem / roll.length : 0})` })),
+          h("span", { class: rem < 500 ? "roll-low" : "" }, `Reste ≈ ${fmtMeters(rem)}`),
+        ),
+      ),
+      h(
+        "div",
+        { class: "btn-row" },
+        h("button", { onclick: () => openRollDialog(roll) }, "Modifier…"),
+        h("button", { onclick: () => openRollDialog() }, "Nouveau rouleau…"),
+      ),
+      h(
+        "p",
+        { class: "hint" },
+        "Les découpes déjà faites sont en gris, à gauche du trait orange qui marque le début du vinyle libre. Le rouleau défile vers la droite.",
+      ),
+    );
+  }
+
+  private mediaWidthRows(): HTMLElement[] {
     const width = this.store.doc.mediaWidth;
     const preset = MEDIA_PRESETS.some(([v]) => Number(v) === width) ? String(width) : "custom";
     const field = numberField({
@@ -83,16 +146,7 @@ export class SidePanel {
       if (v !== "custom") this.setMediaWidth(Number(v));
       else field.input.focus();
     });
-    return this.section(
-      "Support",
-      field.row,
-      h("div", { class: "field" }, h("span", {}, ""), presets.select),
-      h(
-        "p",
-        { class: "hint" },
-        "Le rouleau défile vers la droite. Tapez du texte (T), importez un SVG/DXF (Ctrl+I) ou vectorisez une image.",
-      ),
-    );
+    return [field.row, h("div", { class: "field" }, h("span", {}, ""), presets.select)];
   }
 
   private setMediaWidth(v: number): void {

@@ -13,6 +13,9 @@ Contrat complet : `docs/ARCHITECTURE.md`.
   tourne sur un Raspberry Pi (`npm run build:pi` → `dist/ki-plotter-relay-pi/`, binaires musl
   statiques via cargo-zigbuild). Les fichiers de `deploy/raspberry-pi/` restent en fins de ligne LF.
 - Test local du relais sans Pi : `ki-plotter-relay --listen 127.0.0.1:7870 --device file:<chemin>`.
+- Les rouleaux (`src/model/rolls.ts`) sont communs à tous les projets : `rouleaux.json` dans le
+  dossier de données de l'appli (`%APPDATA%\fr.ki.plotter`), pas dans le `.kplot`. Sur le
+  canevas, x = 0 est le début du vinyle libre ; l'historique du rouleau est en x négatif.
 - Le front tourne aussi dans un navigateur avec un faux backend (`src/backend.ts`) :
   `npm run dev`, utile pour tester l'interface sans l'appli.
 

@@ -21,7 +21,8 @@ export interface Settings {
   cut: CutSettings;
   machine: Omit<MachineSettings, "mediaWidth">;
   output: OutputSettings;
-  view: { wireframe: boolean; grid: boolean };
+  /** sidePanel: "auto" = open in a wide window, closed in a narrow one. */
+  view: { wireframe: boolean; grid: boolean; sidePanel: "auto" | "open" | "closed" };
   lastFont: string | null;
 }
 
@@ -61,7 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
     chunkSize: 256,
     chunkDelayMs: 0,
   },
-  view: { wireframe: false, grid: true },
+  view: { wireframe: false, grid: true, sidePanel: "auto" },
   lastFont: null,
 };
 

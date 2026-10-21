@@ -12,6 +12,10 @@ Logiciel de découpe pour plotter vinyle, écrit pour remplacer SignMaster Cut s
 - **Vectorisation** d'images PNG/JPG/BMP/GIF avec seuil réglable et aperçu.
 - **Échenillage** : cadre et lignes qui s'arrêtent aux lettres.
 - **Mosaïque** : découpe d'un grand dessin en panneaux avec recouvrement, rangés sur le rouleau.
+- **Rouleaux** : chaque rouleau (ex. « Feuille 1 », 700 mm × 10 m, blanc) garde l'historique
+  de ses découpes, affiché en gris à gauche du vinyle libre, et la longueur qui reste. On
+  change de rouleau en un clic, l'historique de chacun est conservé (`rouleaux.json` dans
+  les données de l'appli).
 - **Découpe** : compensation de lame, dépassement, ordre optimisé (intérieurs d'abord),
   miroir pour le flex, aperçu et simulation de la lame, envoi par port série (USB),
   Raspberry Pi sur le réseau, imprimante Windows (RAW) ou fichier `.plt`, test de découpe.

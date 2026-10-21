@@ -255,6 +255,55 @@ input[type="radio"] {
   background: var(--panel);
   border-left: 1px solid var(--line);
 }
+#main.side-collapsed {
+  grid-template-columns: 46px 1fr;
+}
+#main.side-collapsed #side {
+  display: none;
+}
+/* Reopens the collapsed panel from the right edge of the canvas. */
+.side-tab {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 64px;
+  padding: 0;
+  border-radius: 6px 0 0 6px;
+  border-right: none;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 18px;
+  z-index: 5;
+}
+.side-tab:hover:not(:disabled) {
+  color: var(--accent);
+}
+.side-tab[hidden] {
+  display: none;
+}
+/* Narrow window: the panel floats over the canvas instead of squeezing it. */
+@media (max-width: 900px) {
+  #main {
+    grid-template-columns: 46px 1fr;
+    position: relative;
+  }
+  #side {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(290px, 85vw);
+    z-index: 10;
+    box-shadow: -12px 0 30px rgba(0, 0, 0, 0.45);
+  }
+  /* The tab sits on the open panel's edge and closes it. */
+  .side-tab.open {
+    right: min(290px, 85vw);
+    z-index: 11;
+  }
+}
 
 .panel-section {
   padding: 12px 14px 14px;
@@ -357,6 +406,95 @@ textarea {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+/* ---- rolls */
+
+.roll-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+}
+.roll-swatch {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.roll-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.roll-info b {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roll-info span {
+  color: var(--muted);
+}
+.roll-info .roll-low {
+  color: #ffb27a;
+  font-weight: 600;
+}
+.roll-bar {
+  height: 6px;
+  border-radius: 99px;
+  background: #171a21;
+  overflow: hidden;
+}
+.roll-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+}
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.swatch.active {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.form-title {
+  margin: 6px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.roll-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.roll-history li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+.roll-history em {
+  font-style: normal;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .object-list {

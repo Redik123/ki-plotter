@@ -19,6 +19,8 @@ const P: Record<string, string> = {
   align: '<path d="M4 3v18M8 6h11v4H8zM8 14h7v4H8z"/>',
   wire: '<path d="M4 17c3-9 6-9 8-4s5 5 8-4"/><circle cx="4" cy="17" r="1"/><circle cx="20" cy="9" r="1"/>',
   grid: '<rect x="4" y="4" width="16" height="16"/><path d="M4 10h16M4 16h16M10 4v16M16 4v16"/>',
+  panel: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M15 4v16M17.5 8h1M17.5 11h1"/>',
+  roll: '<ellipse cx="7" cy="12" rx="3" ry="7"/><path d="M7 5h12M7 19h12M19 5v14"/><circle cx="7" cy="12" r="1"/>',
   zoomIn: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5M8 11h6M11 8v6"/>',
   zoomOut: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5M8 11h6"/>',
 };

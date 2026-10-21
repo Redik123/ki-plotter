@@ -1,5 +1,6 @@
 import { backend, inTauri, setToastHook } from "./backend";
 import { boundsOf, Store } from "./model/doc";
+import { fmtMeters, rolls } from "./model/rolls";
 import { persist, settings } from "./settings";
 import { Actions } from "./ui/actions";
 import { CanvasView, fmt, isTyping, type Tool } from "./ui/canvas";
@@ -13,19 +14,75 @@ import { createText, loadFonts } from "./ui/text";
 
 const store = new Store();
 setToastHook((m) => toast(m));
+rolls.setErrorHandler((m) => toast(m, "error"));
+
+/** With a roll in place, the media width is the roll's. */
+function syncRollWidth(): void {
+  const r = rolls.current();
+  if (r && store.doc.mediaWidth !== r.width) {
+    store.doc.mediaWidth = r.width;
+    store.emit("doc");
+  }
+}
+rolls.on(syncRollWidth);
+store.on((k) => {
+  if (k === "doc") syncRollWidth();
+});
 
 let panel: SidePanel;
 const view = new CanvasView(store, $("#canvas") as HTMLCanvasElement, {
   onCreateText: (x, y) => {
+    // The text is typed in the panel: make sure it is visible.
+    setSidePanel(true, false);
     void createText(store, x, y).then(() => panel.focusText());
   },
-  onEditText: () => panel.focusText(),
+  onEditText: () => {
+    setSidePanel(true, false);
+    panel.focusText();
+  },
   onCursor: (x, y) => ($("#st-cursor").textContent = `X ${fmt(x)}   Y ${fmt(y)} mm`),
   onToolChange: (t) => markTool(t),
   onDragInfo: (text) => ($("#st-info").textContent = text ?? selectionInfo()),
 });
 const actions = new Actions(store, view);
 panel = new SidePanel(store, view, actions, $("#side"));
+
+// ---- side panel (collapsible)
+
+const NARROW = 900;
+const sideTab = h("button", { class: "side-tab", onclick: () => toggleSidePanel() }, "‹");
+$("#stage").append(sideTab);
+// In a narrow window the panel floats over the canvas: keep a tab to close it.
+const narrowQuery = window.matchMedia(`(max-width: ${NARROW}px)`);
+
+function updateSideTab(open: boolean): void {
+  sideTab.hidden = open && !narrowQuery.matches;
+  sideTab.classList.toggle("open", open);
+  sideTab.textContent = open ? "›" : "‹";
+  sideTab.title = open ? "Masquer le panneau (P)" : "Afficher le panneau (P)";
+}
+narrowQuery.addEventListener("change", () => updateSideTab(!$("#main").classList.contains("side-collapsed")));
+let panelBtn: HTMLButtonElement | null = null;
+
+function sidePanelOpen(): boolean {
+  const pref = settings.view.sidePanel;
+  return pref === "auto" ? window.innerWidth >= NARROW : pref === "open";
+}
+
+/** Opens or closes the panel; `remember` keeps the choice for next time. */
+function setSidePanel(open: boolean, remember = true): void {
+  if (remember) {
+    settings.view.sidePanel = open ? "open" : "closed";
+    persist();
+  }
+  $("#main").classList.toggle("side-collapsed", !open);
+  updateSideTab(open);
+  panelBtn?.classList.toggle("active", open);
+}
+
+function toggleSidePanel(): void {
+  setSidePanel($("#main").classList.contains("side-collapsed"));
+}
 
 // ---- toolbar
 
@@ -66,6 +123,7 @@ document.addEventListener("pointerdown", (e) => {
   if (!alignMenu.hidden && !alignMenu.contains(e.target as Node) && !alignBtn.contains(e.target as Node)) alignMenu.hidden = true;
 });
 
+panelBtn = btn("panel", "", "Afficher / masquer le panneau (P)", () => toggleSidePanel());
 const undoBtn = btn("undo", "", "Annuler (Ctrl+Z)", () => store.undo());
 const redoBtn = btn("redo", "", "Rétablir (Ctrl+Y)", () => store.redo());
 const wireBtn = btn("wire", "", "Afficher seulement les traits de coupe (W)", () => toggleView("wireframe"));
@@ -105,9 +163,11 @@ $("#toolbar").append(
   btn("zoomIn", "", "Zoom avant (+)", () => view.zoomBy(1.25)),
   btn("fit", "", "Tout voir (0) — sélection (F)", () => view.fit()),
   h("span", { class: "spacer" }),
+  panelBtn,
   btn("cut", "Découper", "Envoyer au plotter (Ctrl+P)", () => openCutDialog(store), "primary"),
 );
 syncViewButtons();
+setSidePanel(sidePanelOpen(), false);
 
 // ---- tools
 
@@ -137,9 +197,17 @@ function selectionInfo(): string {
   return `Sélection : ${fmt(b.w)} × ${fmt(b.h)} mm`;
 }
 
+function mediaInfo(): void {
+  const r = rolls.current();
+  $("#st-media").textContent = r
+    ? `${r.name} · ${r.width} mm · reste ≈ ${fmtMeters(rolls.remaining(r))}`
+    : `Laize ${fmt(store.doc.mediaWidth, 0)} mm`;
+}
+rolls.on(mediaInfo);
+
 store.on(() => {
   $("#st-info").textContent = selectionInfo();
-  $("#st-media").textContent = `Laize ${fmt(store.doc.mediaWidth, 0)} mm`;
+  mediaInfo();
   undoBtn.disabled = !store.canUndo;
   redoBtn.disabled = !store.canRedo;
 });
@@ -210,6 +278,7 @@ window.addEventListener("keydown", (e) => {
   else if (k === "r") view.setTool("rect");
   else if (k === "e") view.setTool("ellipse");
   else if (k === "w") toggleView("wireframe");
+  else if (k === "p") toggleSidePanel();
   else if (k === "g") toggleView("grid");
   else if (k === "f") {
     const b = boundsOf(store.selected());
@@ -254,7 +323,7 @@ async function setupWindow(): Promise<void> {
 }
 
 async function start(): Promise<void> {
-  await loadFonts();
+  await Promise.all([loadFonts(), rolls.load()]);
   store.emit("doc");
   view.fit();
   actions.updateTitle();

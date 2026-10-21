@@ -3,6 +3,7 @@
 import { boundsOf, makePathObj, objBounds, type Obj, type Store } from "../model/doc";
 import { ellipsePath, mul, rectContains, rectPath, rotateAt, scaleAt, toPath2D, translate } from "../model/geom";
 import type { Mat, Rect } from "../model/types";
+import { fmtMeters, rolls, type RollCut } from "../model/rolls";
 import { settings } from "../settings";
 
 export type Tool = "select" | "text" | "rect" | "ellipse";
@@ -82,6 +83,7 @@ export class CanvasView {
       }
     });
     store.on(() => this.render());
+    rolls.on(() => this.render());
     this.resize();
   }
 
@@ -107,6 +109,9 @@ export class CanvasView {
   }
 
   get mediaLength(): number {
+    // With a roll in place, the strip is the vinyl that is left.
+    const roll = rolls.current();
+    if (roll) return Math.max(1, rolls.remaining(roll));
     const b = boundsOf(this.store.doc.objects);
     return Math.max(1000, b ? b.x + b.w + 300 : 0);
   }
@@ -116,10 +121,13 @@ export class CanvasView {
     const w = this.canvas.clientWidth - RULER - 60;
     const h = this.canvas.clientHeight - RULER - 60;
     const b = boundsOf(this.store.doc.objects);
+    // Show a little of the roll's history too, left of the free part.
+    const roll = rolls.current();
+    const x0 = roll ? -Math.min(roll.used, 300) : 0;
     const target = rect ?? {
-      x: 0,
+      x: x0,
       y: 0,
-      w: Math.max(400, b ? b.x + b.w + 20 : 0),
+      w: Math.max(400, b ? b.x + b.w + 20 : 0) - x0,
       h: this.store.doc.mediaWidth,
     };
     if (target.w <= 0 || target.h <= 0 || w <= 0 || h <= 0) return;
@@ -199,6 +207,7 @@ export class CanvasView {
     ctx.strokeStyle = "#9aa3b2";
     ctx.lineWidth = px;
     ctx.strokeRect(0, 0, len, media);
+    this.paintRoll(len, media);
 
     // Objects.
     const wire = settings.view.wireframe;
@@ -239,6 +248,102 @@ export class CanvasView {
 
     this.paintSelection();
     this.paintRulers(W, H);
+  }
+
+  private cutPaths = new Map<string, Path2D>();
+
+  private cutPath(c: RollCut): Path2D {
+    let p = this.cutPaths.get(c.id);
+    if (!p) {
+      p = new Path2D();
+      for (const line of c.lines) {
+        line.forEach(([x, y], i) => (i ? p!.lineTo(x, y) : p!.moveTo(x, y)));
+      }
+      this.cutPaths.set(c.id, p);
+    }
+    return p;
+  }
+
+  /** The used part of the roll (old cuts, in grey) left of x = 0, and the roll's end. */
+  private paintRoll(len: number, media: number): void {
+    const roll = rolls.current();
+    if (!roll) return;
+    const { ctx, dpr } = this;
+    const px = 1 / this.zoom;
+    const used = roll.used;
+    const [vx0] = this.toDoc(RULER, 0);
+    const [vx1] = this.toDoc(this.canvas.clientWidth, 0);
+
+    if (used > 0) {
+      ctx.fillStyle = "#e4e7ec";
+      ctx.fillRect(-used, 0, used, media);
+      // Old cuts, in roll coordinates shifted so the free part starts at 0.
+      ctx.save();
+      ctx.translate(-used, 0);
+      ctx.lineWidth = px;
+      for (const c of roll.cuts) {
+        const x = c.x - used;
+        if (x > vx1 || x + c.length < vx0) continue;
+        ctx.strokeStyle = "#9aa2b0";
+        ctx.stroke(this.cutPath(c));
+      }
+      ctx.restore();
+      ctx.setLineDash([3 * px, 4 * px]);
+      ctx.strokeStyle = "#c2c8d2";
+      ctx.beginPath();
+      for (const c of roll.cuts) {
+        const x = c.x - used;
+        if (x > vx1 || x < vx0) continue;
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, media);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Start of the free vinyl (where the blade should be) and the roll's end.
+    ctx.lineWidth = 2 * px;
+    ctx.strokeStyle = ACCENT;
+    ctx.setLineDash([8 * px, 5 * px]);
+    ctx.beginPath();
+    ctx.moveTo(0, -6 * px);
+    ctx.lineTo(0, media + 6 * px);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = "#e5484d";
+    ctx.beginPath();
+    ctx.moveTo(len, -6 * px);
+    ctx.lineTo(len, media + 6 * px);
+    ctx.stroke();
+
+    // Labels, in screen space.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.textBaseline = "top";
+    const [, top] = this.toScreen(0, 0);
+    const [, bottom] = this.toScreen(0, media);
+    for (const c of roll.cuts) {
+      const [sx] = this.toScreen(c.x - used, 0);
+      const w = c.length * this.zoom;
+      if (w < 50 || sx > this.canvas.clientWidth || sx + w < RULER) continue;
+      ctx.fillStyle = "#6f7787";
+      const date = new Date(c.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+      ctx.fillText(fitText(ctx, `${c.name} · ${date}`, w - 8), sx + 4, top + 4);
+    }
+    const [s0] = this.toScreen(0, 0);
+    const [sEnd] = this.toScreen(len, 0);
+    ctx.fillStyle = "#b4561c";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(`${roll.name} : début du vinyle libre`, s0 + 5, top - 2);
+    ctx.fillStyle = "#b0353a";
+    const end = `Fin ≈ (reste ${fmtMeters(len)})`;
+    ctx.fillText(end, sEnd - ctx.measureText(end).width - 5, top - 2);
+    if (used > 0) {
+      ctx.fillStyle = "#8a93a3";
+      ctx.textBaseline = "top";
+      ctx.fillText(`Déjà utilisé : ${fmtMeters(used)}`, Math.max(RULER + 4, s0 - 150), bottom + 4);
+    }
+    this.viewTransform();
   }
 
   private paintGrid(len: number, media: number): void {
@@ -622,6 +727,14 @@ export class CanvasView {
     }
     this.zoomBy(Math.exp(-e.deltaY * 0.0015), sx, sy);
   }
+}
+
+/** Shortens a label with "…" to fit `max` pixels. */
+function fitText(ctx: CanvasRenderingContext2D, text: string, max: number): string {
+  if (ctx.measureText(text).width <= max) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(`${t}…`).width > max) t = t.slice(0, -1);
+  return `${t}…`;
 }
 
 function clampScale(f: number): number {
