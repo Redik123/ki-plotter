@@ -182,14 +182,24 @@ export type Destination =
   | { kind: "serial"; port: string; baud: number; flow: Flow }
   | { kind: "printer"; name: string }
   | { kind: "file"; path: string }
-  /** KI Plotter relay (Raspberry Pi wired to the cutter). Empty device = the relay's choice. */
-  | { kind: "network"; host: string; port: number; device: string; baud: number; flow: Flow };
+  /** KI Plotter relay (Raspberry Pi wired to the cutter). Empty device, baud 0, flow null = the relay's settings. */
+  | { kind: "network"; host: string; port: number; device: string; baud: number; flow: Flow | null };
+
+/** What the relay shows on its screen, and the settings its own test cut uses. */
+export interface JobInfo {
+  name: string;
+  widthMm: number;
+  heightMm: number;
+  estimatedSeconds: number;
+  settings: { cut: CutSettings; machine: MachineSettings } | null;
+}
 
 export interface SendRequest {
   destination: Destination;
   data: string;
   chunkSize: number;
   chunkDelayMs: number;
+  info: JobInfo;
 }
 
 export interface PortInfo {
@@ -218,6 +228,8 @@ export interface RelayStatus {
   deviceError: string | null;
   ports: PortInfo[];
   last: { ok: boolean; cancelled: boolean; error: string | null; bytes: number; client: string } | null;
+  mode: "queue" | "direct";
+  queued: number;
 }
 
 export interface JobProgress {
@@ -229,4 +241,7 @@ export interface JobFinished {
   ok: boolean;
   cancelled: boolean;
   error: string | null;
+  /** The relay keeps the job in its queue; it is cut when started on the relay's screen. */
+  queued: boolean;
+  position: number;
 }

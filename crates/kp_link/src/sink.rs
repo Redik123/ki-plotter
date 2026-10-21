@@ -117,6 +117,7 @@ mod tests {
         SendOptions {
             chunk_size,
             chunk_delay_ms: 0,
+            ..SendOptions::default()
         }
     }
 

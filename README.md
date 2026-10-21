@@ -67,6 +67,12 @@ Un Raspberry Pi (2 à 5) reste branché en USB au plotter et reçoit les découp
 réseau. Dans **Découper**, choisir *Envoyer vers* **Raspberry Pi (réseau)** puis
 **Rechercher** : le Pi est trouvé automatiquement sur le réseau local.
 
+Les travaux attendent sur le Pi (file d'attente gardée même après une coupure de
+courant) ; on lance la découpe depuis son **écran de contrôle** une fois le vinyle en
+place. Cet écran s'affiche sur un petit écran tactile 3,5" branché au Pi, ou dans un
+navigateur (`http://ki-plotter.local:7870/`). On peut aussi y arrêter une découpe, faire
+une coupe test, recouper le dernier travail et régler le port du plotter.
+
 Préparer le paquet à copier sur le Pi (binaires 32 et 64 bits + script d'installation) :
 
 ```bash

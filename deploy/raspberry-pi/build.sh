@@ -27,10 +27,10 @@ for pair in "aarch64-unknown-linux-musl:aarch64" "armv7-unknown-linux-musleabihf
   CARGO_TARGET_DIR=target/pi cargo zigbuild --release -p kp_relay --target "$target"
   cp "target/pi/$target/release/ki-plotter-relay" "$out/ki-plotter-relay-$name"
 done
-for f in install.sh ki-plotter-relay.service ki-plotter-relay.conf LISEZMOI.md; do
+for f in install.sh kiosk.sh ki-plotter-relay.service ki-plotter-relay.conf LISEZMOI.md; do
   # Unix line endings whatever the checkout did: a CRLF install.sh fails on the Pi.
   sed 's/\r$//' "deploy/raspberry-pi/$f" > "$out/$f"
 done
-cp LICENSE "$out/LICENSE"
-chmod +x "$out/install.sh" "$out"/ki-plotter-relay-*
+sed 's/\r$//' LICENSE > "$out/LICENSE"
+chmod +x "$out/install.sh" "$out/kiosk.sh" "$out"/ki-plotter-relay-*
 echo "Prêt : $out"

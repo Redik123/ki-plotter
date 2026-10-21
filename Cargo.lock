@@ -1996,6 +1996,7 @@ dependencies = [
 name = "kp_relay"
 version = "0.1.0"
 dependencies = [
+ "kp_geom",
  "kp_link",
  "serde",
  "serde_json",

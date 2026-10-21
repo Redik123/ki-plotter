@@ -144,16 +144,28 @@ HTTP/1.1 sur le port **7870**, une requête par connexion :
 
 | Requête | Réponse |
 |---|---|
-| `GET /status` | `RelayStatus` : nom, occupé, progression, plotter par défaut, ports série, dernier travail |
-| `POST /job?device=&baud=&flow=&chunkSize=&chunkDelayMs=` (corps = octets du travail) | `200` puis une ligne JSON par événement : `{"type":"progress","sent","total"}` … `{"type":"done","ok","cancelled","error"}` ; sinon `{"error":"…"}` (`409` si occupé, `503` si pas de plotter) |
+| `GET /status` | `RelayStatus` : nom, mode, occupé, progression, plotter, ports série, dernier travail, nombre en attente |
+| `POST /job?name=&width=&height=&seconds=&settings=&device=&baud=&flow=&chunkSize=&chunkDelayMs=` (corps = octets du travail) | `200` puis des lignes JSON. Mode file d'attente : `{"type":"queued","id","position"}`. Mode direct : `{"type":"progress","sent","total"}` … `{"type":"done","ok","cancelled","error"}`. Sinon `{"error":"…"}` (`409` si occupé) |
 | `POST /cancel` | arrête le travail en cours entre deux blocs |
-| `GET /` | page d'état HTML (téléphone) |
+| `GET /` | écran de contrôle (tactile 480×320, téléphone, PC) |
+| `GET /api/state` | état complet pour l'écran : en cours, file, dernier résultat, travail à recouper, réglages, ports |
+| `POST /api/start?id=` | coupe un travail de la file (sans `id` : le suivant) |
+| `POST /api/delete?id=` | retire un travail de la file |
+| `POST /api/recut`, `POST /api/test`, `POST /api/cancel` | recouper le dernier, coupe test 25 mm, arrêter |
+| `POST /api/settings` (JSON `{name, mode, device, baud, flow}`) | enregistre les réglages de l'écran |
 
 Découverte : datagramme UDP `KI-PLOTTER-RELAY?` diffusé sur le port 7870 de chaque réseau
 du PC, réponse `RelayInfo` en JSON.
 
-Côté PC, la destination `network` envoie le travail d'un coup puis suit la progression du
-Pi. L'annulation envoie `POST /cancel`. Si le PC se déconnecte, le Pi termine quand même
-la découpe. Les paramètres vides (`device`, `baud` = 0, pas de `flow`) prennent ceux de
-`/etc/ki-plotter-relay.conf`. `device` vaut `auto` (premier port USB série, sinon
-`/dev/usb/lp*`), un chemin, ou `file:<chemin>` (tests).
+Un seul fil de travail découpe, un travail à la fois. La file, le dernier travail, les
+réglages de l'écran et les réglages machine du dernier envoi du PC (pour la coupe test,
+construite sur le Pi avec `kp_geom`) sont gardés dans le dossier d'état
+(`/var/lib/ki-plotter-relay`). Priorité des réglages : ligne de commande, écran
+(`settings.conf`), `/etc/ki-plotter-relay.conf`.
+
+Côté PC, la destination `network` envoie le travail avec son nom, sa taille et les
+réglages `{cut, machine}`, puis suit la progression en mode direct ou rend
+`SendOutcome::Queued` (« En attente sur le Pi »). Le port, le débit et le contrôle de flux
+sont ceux du Pi. Si le PC se déconnecte, le Pi termine quand même la découpe. `device`
+vaut `auto` (premier port USB série, sinon `/dev/usb/lp*`), un chemin, ou `file:<chemin>`
+(tests).

@@ -10,10 +10,9 @@ export interface OutputSettings {
   baud: number;
   flow: Flow;
   printer: string;
-  /** Raspberry Pi relay: address, TCP port, and serial port on the Pi ("" = automatic). */
+  /** Raspberry Pi relay: address and TCP port (its line settings live on the Pi). */
   relayHost: string;
   relayPort: number;
-  relayDevice: string;
   chunkSize: number;
   chunkDelayMs: number;
 }
@@ -59,7 +58,6 @@ export const DEFAULT_SETTINGS: Settings = {
     printer: "",
     relayHost: "",
     relayPort: 7870,
-    relayDevice: "",
     chunkSize: 256,
     chunkDelayMs: 0,
   },

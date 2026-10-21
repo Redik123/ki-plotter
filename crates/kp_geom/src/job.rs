@@ -518,7 +518,10 @@ mod tests {
         r.cut.blade_offset = 0.5;
         r.cut.overcut = 2.0;
         let job = build_job(&r).unwrap();
-        let pts: Vec<(i64, i64)> = parse_hpgl(&job.data).into_iter().flat_map(|(_, p)| p).collect();
+        let pts: Vec<(i64, i64)> = parse_hpgl(&job.data)
+            .into_iter()
+            .flat_map(|(_, p)| p)
+            .collect();
         assert!(pts.iter().all(|&(x, y)| x >= 0 && y >= 0), "{}", job.data);
         // The swivel arcs stick out by the offset: the job really reaches zero.
         assert!(pts.iter().any(|&(x, _)| x == 0) && pts.iter().any(|&(_, y)| y == 0));

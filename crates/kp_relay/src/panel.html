@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>KI Plotter — relais</title>
+<style>
+:root {
+  --bg: #15181e; --panel: #20252e; --panel-2: #2a303b; --line: #343b48;
+  --text: #e3e7ee; --muted: #8f98a8; --accent: #ff8a3d; --ink: #1a1206;
+  --ok: #5ad17d; --err: #ff6b6f;
+  --fs-s: 12px; --fs-m: 15px; --fs-l: 19px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body {
+  display: flex; flex-direction: column; overflow: hidden;
+  font: var(--fs-m)/1.35 system-ui, "Segoe UI", sans-serif; color: var(--text); background: var(--bg);
+  user-select: none; touch-action: manipulation;
+}
+body.kiosk, body.kiosk * { cursor: none !important; }
+button {
+  font: inherit; color: inherit; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 8px; min-height: 44px; padding: 0 14px; cursor: pointer;
+}
+button:active:not(:disabled) { filter: brightness(1.25); }
+button:disabled { opacity: 0.4; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--ink); font-weight: 650; }
+button.danger { background: #4a2328; border-color: var(--err); color: #ffd6d8; font-weight: 650; }
+select, input {
+  font: inherit; color: inherit; background: #171a21; border: 1px solid var(--line);
+  border-radius: 8px; min-height: 44px; padding: 0 10px; width: 100%;
+}
+header {
+  display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 42px; flex: none;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; white-space: nowrap; }
+.brand span { color: var(--accent); }
+#relayName { color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill { padding: 3px 10px; border-radius: 99px; font-size: var(--fs-s); font-weight: 650; white-space: nowrap; background: var(--panel-2); }
+.pill.ok { color: var(--ok); } .pill.busy { color: var(--ink); background: var(--accent); } .pill.err { color: #fff; background: #8c2a30; }
+main { flex: 1; overflow-y: auto; padding: 10px 12px; }
+main > section { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+[hidden] { display: none !important; }
+nav {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 6px; flex: none;
+  background: var(--panel); border-top: 1px solid var(--line);
+}
+nav button { min-height: 46px; padding: 0 4px; }
+nav button.active { border-color: var(--accent); color: var(--accent); }
+nav em { font-style: normal; background: var(--accent); color: var(--ink); border-radius: 99px; padding: 0 6px; margin-left: 4px; font-size: var(--fs-s); font-weight: 700; }
+nav em:empty { display: none; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+#current { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; align-items: center; border-color: var(--accent); }
+#current .name { font-size: var(--fs-l); font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#current .meta { color: var(--muted); font-size: var(--fs-s); }
+#current .bar { grid-column: 1 / -1; height: 10px; border-radius: 99px; background: #11141a; overflow: hidden; }
+#current .bar i { display: block; height: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform 0.3s; }
+#current button { grid-row: 1 / 3; grid-column: 2; min-width: 110px; }
+.recent { color: var(--muted); }
+.recent b { color: var(--text); font-weight: 600; }
+.recent.ok::before { content: "✓ "; color: var(--ok); } .recent.err::before { content: "✗ "; color: var(--err); }
+.recent.stop::before { content: "■ "; color: var(--accent); }
+.recent .error { color: #ffb0b3; display: block; }
+h2 { margin: 4px 0 0; font-size: var(--fs-s); font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+#queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+#queue li { display: flex; align-items: center; gap: 8px; }
+#queue .info { flex: 1; min-width: 0; }
+#queue .info b { display: block; font-size: var(--fs-l); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#queue .info small { color: var(--muted); font-size: var(--fs-s); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#queue .go { min-width: 92px; }
+#queue .del { min-width: 44px; padding: 0; color: var(--muted); }
+.empty { text-align: center; color: var(--muted); margin: 18px 0; }
+
+.field { display: grid; grid-template-columns: 110px 1fr; align-items: center; gap: 8px; }
+.field > span { color: var(--muted); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.seg button.on { border-color: var(--accent); color: var(--accent); font-weight: 650; }
+.hint { color: var(--muted); font-size: var(--fs-s); margin: 0; }
+/* Always reachable on a 320 px tall screen. */
+#save { position: sticky; bottom: 0; box-shadow: 0 -8px 12px var(--bg); }
+
+#sheet { position: fixed; inset: 0; background: rgba(8, 10, 14, 0.7); display: flex; align-items: flex-end; justify-content: center; }
+#sheet .box { width: 100%; max-width: 520px; background: var(--panel); border-top: 2px solid var(--accent); border-radius: 14px 14px 0 0; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+#sheet .title { font-weight: 650; }
+#sheet .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#toast { position: fixed; left: 50%; bottom: 68px; transform: translateX(-50%); max-width: 92vw; background: #2b3240; border: 1px solid var(--line); border-radius: 8px; padding: 8px 14px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+#toast.show { opacity: 1; } #toast.err { border-color: var(--err); background: #3a2228; }
+
+/* 3.5" screens (480×320) and small phones in landscape */
+@media (max-height: 360px) {
+  header { height: 36px; }
+  main { padding: 6px 8px; }
+  nav { padding: 4px; gap: 4px; }
+  nav button { min-height: 44px; }
+  .card { padding: 8px 10px; }
+}
+@media (max-width: 400px) {
+  .field { grid-template-columns: 1fr; gap: 4px; }
+  #current button { min-width: 90px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand"><span>KI</span> Plotter</span>
+  <span id="relayName"></span>
+  <span id="pill" class="pill">…</span>
+</header>
+<main>
+  <section id="view-jobs">
+    <div id="current" class="card" hidden>
+      <div class="name"></div>
+      <div class="meta"></div>
+      <div class="bar"><i></i></div>
+      <button id="stop" class="danger">Arrêter</button>
+    </div>
+    <div id="recent" class="recent" hidden></div>
+    <h2 id="queueTitle" hidden>En attente</h2>
+    <ul id="queue"></ul>
+    <p id="empty" class="empty">Aucun travail en attente.<br>Envoyez-en un depuis KI Plotter.</p>
+  </section>
+  <section id="view-settings" hidden>
+    <div class="field"><span>Mode</span>
+      <div class="seg"><button data-mode="queue">File d'attente</button><button data-mode="direct">Direct</button></div>
+    </div>
+    <p class="hint" id="modeHint"></p>
+    <label class="field"><span>Plotter</span><select id="device"></select></label>
+    <label class="field"><span>Débit</span><select id="baud"></select></label>
+    <label class="field"><span>Contrôle de flux</span>
+      <select id="flow"><option value="hardware">Matériel (RTS/CTS)</option><option value="software">Logiciel (XON/XOFF)</option><option value="none">Aucun</option></select>
+    </label>
+    <label class="field"><span>Nom</span><input id="name" maxlength="60" autocomplete="off"></label>
+    <button id="save" class="primary">Enregistrer</button>
+    <p class="hint" id="about"></p>
+  </section>
+</main>
+<nav>
+  <button class="tab active" data-view="jobs">Travaux<em id="count"></em></button>
+  <button id="btnTest">Coupe test</button>
+  <button id="btnRecut">Recouper</button>
+  <button class="tab" data-view="settings">Réglages</button>
+</nav>
+<div id="sheet" hidden><div class="box"><div class="title"></div><div class="hint"></div><div class="row"><button id="no">Annuler</button><button id="yes" class="primary">Couper</button></div></div></div>
+<div id="toast"></div>
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const BAUDS = [2400, 4800, 9600, 19200, 38400, 57600, 115200];
+if (new URLSearchParams(location.search).has("kiosk")) document.body.classList.add("kiosk");
+
+let state = null;
+let view = "jobs";
+let settingsDirty = false;
+let mode = "queue";
+
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const mm = (v) => (v > 0 ? v.toLocaleString("fr-FR", { maximumFractionDigits: v < 100 ? 1 : 0 }) : "?");
+const size = (j) => (j.widthMm > 0 ? `${mm(j.widthMm)} × ${mm(j.heightMm)} mm` : `${Math.round(j.bytes / 1024) || 1} Ko`);
+function dur(s) {
+  if (!(s > 0)) return "";
+  if (s < 60) return `≈ ${Math.max(1, Math.round(s))} s`;
+  const m = Math.floor(s / 60), r = Math.round(s % 60);
+  return `≈ ${m} min${r ? ` ${r} s` : ""}`;
+}
+function ago(t) {
+  if (!state || !t) return "";
+  const d = Math.max(0, state.now - t);
+  if (d < 60) return "à l'instant";
+  if (d < 3600) return `il y a ${Math.floor(d / 60)} min`;
+  if (d < 86400) return `il y a ${Math.floor(d / 3600)} h`;
+  return `il y a ${Math.floor(d / 86400)} j`;
+}
+
+let toastTimer = 0;
+function toast(msg, err = false) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.className = `show${err ? " err" : ""}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (t.className = ""), err ? 5000 : 2500);
+}
+
+async function api(path, body) {
+  try {
+    const r = await fetch(path, {
+      method: "POST",
+      headers: body ? { "Content-Type": "application/json" } : {},
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `Erreur ${r.status}`);
+    poll();
+    return true;
+  } catch (e) {
+    toast(e.message || "Relais injoignable.", true);
+    return false;
+  }
+}
+
+/** Confirmation sheet: big buttons, nothing cut by a stray tap. */
+function confirmCut(title, detail, yes = "Couper") {
+  return new Promise((resolve) => {
+    const s = $("#sheet");
+    s.querySelector(".title").textContent = title;
+    s.querySelector(".hint").textContent = detail;
+    $("#yes").textContent = yes;
+    $("#yes").className = yes === "Supprimer" ? "danger" : "primary";
+    s.hidden = false;
+    const done = (v) => { s.hidden = true; $("#yes").onclick = $("#no").onclick = s.onclick = null; resolve(v); };
+    $("#yes").onclick = (e) => { e.stopPropagation(); done(true); };
+    $("#no").onclick = (e) => { e.stopPropagation(); done(false); };
+    s.onclick = (e) => { if (e.target === s) done(false); };
+  });
+}
+
+function renderJobs() {
+  const st = state;
+  const cur = st.current;
+  $("#current").hidden = !cur;
+  if (cur) {
+    const pct = cur.total ? Math.floor((cur.sent * 100) / cur.total) : 0;
+    $("#current .name").textContent = cur.name;
+    $("#current .meta").textContent = `${pct} % · ${size(cur)}${cur.test ? " · test" : ""}`;
+    $("#current .bar i").style.transform = `scaleX(${pct / 100})`;
+  }
+  const r = st.recent;
+  const rec = $("#recent");
+  rec.hidden = !r || !!cur;
+  if (r && !cur) {
+    rec.className = `recent ${r.ok ? "ok" : r.cancelled ? "stop" : "err"}`;
+    const what = r.ok ? "découpé" : r.cancelled ? "arrêté" : "non découpé";
+    const html = `<b>${esc(r.name)}</b> ${what} ${esc(ago(r.finishedAt))}` +
+      (r.error ? `<span class="error">${esc(r.error)}</span>` : "");
+    if (rec.innerHTML !== html) rec.innerHTML = html;
+  }
+  const q = st.queue;
+  $("#queueTitle").hidden = q.length === 0;
+  $("#empty").hidden = q.length > 0 || !!cur;
+  // Only touch the DOM when the list changed: replacing a button between
+  // touch-down and touch-up would swallow the tap.
+  const html = q.map((j) => `
+    <li class="card">
+      <div class="info"><b>${esc(j.name)}</b>
+        <small>${[size(j), dur(j.estimatedSeconds), ago(j.received)].filter(Boolean).map(esc).join(" · ")}</small></div>
+      <button class="go primary" data-id="${j.id}" ${st.busy || st.deviceError ? "disabled" : ""}>Couper</button>
+      <button class="del" data-del="${j.id}" aria-label="Supprimer">✕</button>
+    </li>`).join("");
+  if (html !== queueHtml) {
+    queueHtml = html;
+    $("#queue").innerHTML = html;
+  }
+}
+let queueHtml = "";
+
+function renderSettings(force) {
+  const st = state;
+  if (settingsDirty && !force) return;
+  const s = st.settings;
+  mode = s.mode;
+  document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === mode));
+  $("#modeHint").textContent = mode === "queue"
+    ? "Les travaux envoyés depuis le PC attendent ici qu'on appuie sur Couper."
+    : "Les travaux sont coupés dès qu'ils arrivent du PC.";
+  const dev = $("#device");
+  // `st.device` is what the current setting resolves to: only meaningful next to "auto" when auto is chosen.
+  const opts = [["auto", s.device === "auto" && st.device ? `Automatique (${st.device})` : "Automatique"]]
+    .concat(st.ports.map((p) => [p.name, p.description ? `${p.name} — ${p.description}` : p.name]));
+  if (s.device !== "auto" && !opts.some(([v]) => v === s.device)) opts.push([s.device, `${s.device} (absent)`]);
+  dev.innerHTML = opts.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join("");
+  dev.value = s.device || "auto";
+  $("#baud").innerHTML = BAUDS.map((b) => `<option value="${b}">${b} bauds</option>`).join("");
+  $("#baud").value = String(s.baud);
+  $("#flow").value = s.flow;
+  $("#name").value = s.name;
+  $("#about").textContent = `Relais ${st.version}` + (st.deviceError ? ` · ${st.deviceError}` : "");
+}
+
+function render() {
+  const st = state;
+  $("#relayName").textContent = st.name;
+  const pill = $("#pill");
+  if (st.current) {
+    const pct = st.current.total ? Math.floor((st.current.sent * 100) / st.current.total) : 0;
+    pill.textContent = `Découpe ${pct} %`;
+    pill.className = "pill busy";
+  } else if (st.deviceError) {
+    pill.textContent = "Plotter absent";
+    pill.className = "pill err";
+  } else {
+    pill.textContent = "Prêt";
+    pill.className = "pill ok";
+  }
+  $("#count").textContent = st.queue.length ? String(st.queue.length) : "";
+  $("#btnTest").disabled = st.busy || !!st.deviceError;
+  $("#btnRecut").disabled = st.busy || !st.recut || !!st.deviceError;
+  renderJobs();
+  if (view === "settings") renderSettings(false);
+}
+
+let pollTimer = 0;
+async function poll() {
+  clearTimeout(pollTimer);
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    state = await r.json();
+    render();
+  } catch {
+    $("#pill").textContent = "Relais injoignable";
+    $("#pill").className = "pill err";
+  }
+  pollTimer = setTimeout(poll, state && state.busy ? 500 : 1500);
+}
+
+document.querySelectorAll("nav .tab").forEach((b) => b.addEventListener("click", () => {
+  view = b.dataset.view;
+  document.querySelectorAll("nav .tab").forEach((x) => x.classList.toggle("active", x === b));
+  $("#view-jobs").hidden = view !== "jobs";
+  $("#view-settings").hidden = view !== "settings";
+  if (view === "settings" && state) { settingsDirty = false; renderSettings(true); }
+}));
+
+$("#queue").addEventListener("click", async (e) => {
+  const go = e.target.closest("[data-id]");
+  const del = e.target.closest("[data-del]");
+  if (go) {
+    const j = state.queue.find((x) => String(x.id) === go.dataset.id);
+    if (j && await confirmCut(`Couper « ${j.name} » ?`, `${size(j)} — le vinyle est-il en place ?`)) api(`/api/start?id=${j.id}`);
+  } else if (del) {
+    const j = state.queue.find((x) => String(x.id) === del.dataset.del);
+    if (j && await confirmCut(`Supprimer « ${j.name} » ?`, "Il faudra le renvoyer depuis le PC.", "Supprimer")) api(`/api/delete?id=${j.id}`);
+  }
+});
+$("#stop").addEventListener("click", () => api("/api/cancel"));
+$("#btnTest").addEventListener("click", async () => {
+  if (await confirmCut("Couper le carré test de 25 mm ?", "Avec les réglages du dernier envoi du PC.")) api("/api/test");
+});
+$("#btnRecut").addEventListener("click", async () => {
+  const j = state && state.recut;
+  if (j && await confirmCut(`Recouper « ${j.name} » ?`, `${size(j)} — une copie de plus.`)) api("/api/recut");
+});
+document.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => {
+  mode = b.dataset.mode;
+  settingsDirty = true;
+  document.querySelectorAll("[data-mode]").forEach((x) => x.classList.toggle("on", x === b));
+  $("#modeHint").textContent = mode === "queue"
+    ? "Les travaux envoyés depuis le PC attendent ici qu'on appuie sur Couper."
+    : "Les travaux sont coupés dès qu'ils arrivent du PC.";
+}));
+["#device", "#baud", "#flow", "#name"].forEach((s) => $(s).addEventListener("input", () => (settingsDirty = true)));
+$("#save").addEventListener("click", async () => {
+  const ok = await api("/api/settings", {
+    name: $("#name").value,
+    mode,
+    device: $("#device").value,
+    baud: Number($("#baud").value),
+    flow: $("#flow").value,
+  });
+  if (ok) { settingsDirty = false; toast("Réglages enregistrés."); }
+});
+
+poll();
+</script>
+</body>
+</html>

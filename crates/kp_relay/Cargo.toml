@@ -11,5 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 kp_link.workspace = true
+# Only for the relay's own test cut, built with the desktop's settings.
+kp_geom.workspace = true
 serde.workspace = true
 serde_json.workspace = true

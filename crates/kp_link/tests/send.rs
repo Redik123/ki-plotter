@@ -43,6 +43,7 @@ fn file_destination_end_to_end() {
     let opts = SendOptions {
         chunk_size: 64,
         chunk_delay_ms: 1,
+        ..SendOptions::default()
     };
     let cancel = AtomicBool::new(false);
     let mut seen = Vec::new();
@@ -72,6 +73,7 @@ fn cancel_from_progress_stops_after_first_chunk() {
     let opts = SendOptions {
         chunk_size: 100,
         chunk_delay_ms: 0,
+        ..SendOptions::default()
     };
     let cancel = AtomicBool::new(false);
     let mut calls = 0;
@@ -154,7 +156,8 @@ fn send_options_json() {
         o,
         SendOptions {
             chunk_size: 512,
-            chunk_delay_ms: 10
+            chunk_delay_ms: 10,
+            ..SendOptions::default()
         }
     );
     let d: SendOptions = serde_json::from_str("{}").expect("parse defaults");

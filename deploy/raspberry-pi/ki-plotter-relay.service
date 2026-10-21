@@ -7,6 +7,8 @@ Wants=network-online.target
 ExecStart=/usr/local/bin/ki-plotter-relay --config /etc/ki-plotter-relay.conf
 Restart=always
 RestartSec=3
+# File d'attente, dernier travail et réglages de l'écran : /var/lib/ki-plotter-relay
+StateDirectory=ki-plotter-relay
 # Utilisateur système temporaire, avec accès aux ports série (dialout)
 # et aux imprimantes USB (lp) seulement.
 DynamicUser=yes

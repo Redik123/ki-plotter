@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use kp_geom::{JobRequest, JobResult, PathData, Tile, TileRequest, WeedRequest};
 use kp_import::{FontInfo, ImageInfo, Imported, TextOutline, TextRequest, TraceRequest};
 use kp_link::relay::{self, RelayInfo, RelayStatus};
-use kp_link::{Destination, PortInfo, SendOptions, SendOutcome};
+use kp_link::{Destination, JobInfo, PortInfo, SendOptions, SendOutcome};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
 
@@ -123,6 +123,9 @@ struct SendRequest {
     chunk_size: usize,
     #[serde(default)]
     chunk_delay_ms: u64,
+    /// Name, size and settings of the job, shown on the relay's screen.
+    #[serde(default)]
+    info: JobInfo,
 }
 
 #[derive(Clone, Serialize)]
@@ -137,6 +140,9 @@ struct JobFinished {
     ok: bool,
     cancelled: bool,
     error: Option<String>,
+    /// The relay keeps the job in its queue (started from its screen).
+    queued: bool,
+    position: usize,
 }
 
 /// Starts sending in the background; progress and the outcome arrive as
@@ -152,6 +158,7 @@ fn send_job(app: AppHandle, state: State<'_, Arc<Sender>>, req: SendRequest) -> 
         let opts = SendOptions {
             chunk_size: req.chunk_size,
             chunk_delay_ms: req.chunk_delay_ms,
+            info: req.info,
         };
         let mut last = Instant::now() - Duration::from_secs(1);
         let mut progress = |sent: usize, total: usize| {
@@ -168,22 +175,18 @@ fn send_job(app: AppHandle, state: State<'_, Arc<Sender>>, req: SendRequest) -> 
             &mut progress,
             &sender.cancel,
         );
+        let done = |ok, cancelled, error, queued, position| JobFinished {
+            ok,
+            cancelled,
+            error,
+            queued,
+            position,
+        };
         let finished = match result {
-            Ok(SendOutcome::Completed) => JobFinished {
-                ok: true,
-                cancelled: false,
-                error: None,
-            },
-            Ok(SendOutcome::Cancelled) => JobFinished {
-                ok: false,
-                cancelled: true,
-                error: None,
-            },
-            Err(e) => JobFinished {
-                ok: false,
-                cancelled: false,
-                error: Some(e),
-            },
+            Ok(SendOutcome::Completed) => done(true, false, None, false, 0),
+            Ok(SendOutcome::Queued { position }) => done(true, false, None, true, position),
+            Ok(SendOutcome::Cancelled) => done(false, true, None, false, 0),
+            Err(e) => done(false, false, Some(e), false, 0),
         };
         sender.busy.store(false, Ordering::SeqCst);
         let _ = app.emit("job-finished", finished);

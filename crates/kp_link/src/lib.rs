@@ -65,14 +65,16 @@ pub enum Flow {
     Software,
 }
 
-/// How the bytes are paced.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// How the bytes are paced, and what the job is (shown by the relay).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SendOptions {
     /// Bytes per block (0 is treated as the default, 256).
     pub chunk_size: usize,
     /// Pause between two blocks, in milliseconds (none after the last one).
     pub chunk_delay_ms: u64,
+    /// Only used by the network destination.
+    pub info: JobInfo,
 }
 
 impl SendOptions {
@@ -84,8 +86,23 @@ impl Default for SendOptions {
         Self {
             chunk_size: Self::DEFAULT_CHUNK_SIZE,
             chunk_delay_ms: 0,
+            info: JobInfo::default(),
         }
     }
+}
+
+/// Description of a job, for the relay's screen (queue, history) and its
+/// own test cut.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct JobInfo {
+    pub name: String,
+    pub width_mm: f64,
+    pub height_mm: f64,
+    pub estimated_seconds: f64,
+    /// The desktop's `{cut, machine}` settings, so a test cut started on
+    /// the relay matches what the desktop would send.
+    pub settings: Option<serde_json::Value>,
 }
 
 /// How a [`send`] call ended (errors are the `Err` side).
@@ -96,6 +113,9 @@ pub enum SendOutcome {
     Completed,
     /// Stopped early because `cancel` was set.
     Cancelled,
+    /// Network only: the relay keeps the job in its queue until someone
+    /// starts it on the relay's screen. `position` is 1 for the next one.
+    Queued { position: usize },
 }
 
 /// Kind of serial port, as far as the OS can tell.
@@ -192,6 +212,7 @@ pub fn send(
                 flow: *flow,
                 chunk_size: opts.chunk_size,
                 chunk_delay_ms: opts.chunk_delay_ms,
+                info: opts.info.clone(),
             };
             relay::send(host, *port, &params, data, progress, cancel)
         }

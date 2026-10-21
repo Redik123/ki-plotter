@@ -3,16 +3,17 @@
 //!
 //! Protocol — HTTP/1.1, one request per connection, `Connection: close`:
 //! - `GET /status` → [`RelayStatus`] as JSON.
-//! - `POST /job?device=&baud=&flow=&chunkSize=&chunkDelayMs=` ([`JobParams`])
-//!   with the raw HPGL/DMPL bytes as body → `200` and one JSON
-//!   [`RelayEvent`] per line until the job ends. Any other status carries
-//!   `{"error": "…"}` (e.g. `409` while another job is running).
+//! - `POST /job?…` ([`JobParams`]) with the raw HPGL/DMPL bytes as body →
+//!   `200` and one JSON [`RelayEvent`] per line. In queue mode a single
+//!   `queued` event (the job waits to be started on the relay's screen);
+//!   in direct mode `progress` events until `done`. Any other status
+//!   carries `{"error": "…"}` (e.g. `409` while another job is running).
 //! - `POST /cancel` → the running job stops between two blocks.
 //! - Discovery: a UDP datagram [`DISCOVER_MAGIC`] sent to port
 //!   [`DEFAULT_PORT`] is answered with a [`RelayInfo`] JSON datagram.
 //!
-//! The relay uploads nothing back and keeps no files: the job is held in
-//! memory while it is sent to the cutter.
+//! The relay also serves its own touch panel (`GET /`, `/api/…`), see the
+//! `kp_relay` crate.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream, ToSocketAddrs, UdpSocket};
@@ -22,7 +23,7 @@ use std::time::{Duration, Instant};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::{Flow, PortInfo, SendOutcome};
+use crate::{Flow, JobInfo, PortInfo, SendOutcome};
 
 /// TCP (HTTP) and UDP (discovery) port of the relay.
 pub const DEFAULT_PORT: u16 = 7870;
@@ -70,6 +71,10 @@ pub struct RelayStatus {
     /// Serial ports present on the relay.
     pub ports: Vec<PortInfo>,
     pub last: Option<LastJob>,
+    /// "queue" (jobs wait for the relay's screen) or "direct".
+    pub mode: String,
+    /// Jobs waiting in the queue.
+    pub queued: usize,
 }
 
 /// One line of the `POST /job` response.
@@ -85,11 +90,16 @@ pub enum RelayEvent {
         cancelled: bool,
         error: Option<String>,
     },
+    /// Queue mode: the job waits on the relay; `position` 1 = next.
+    Queued {
+        id: u64,
+        position: usize,
+    },
 }
 
 /// Per-job settings of `POST /job`. Empty, zero or `None` means "use the
 /// relay's configuration".
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct JobParams {
     /// `auto`, `/dev/ttyUSB0`, `/dev/usb/lp0`… (empty = relay default).
     pub device: String,
@@ -97,6 +107,13 @@ pub struct JobParams {
     pub flow: Option<Flow>,
     pub chunk_size: usize,
     pub chunk_delay_ms: u64,
+    pub info: JobInfo,
+}
+
+fn push_num(q: &mut Vec<String>, key: &str, v: f64) {
+    if v.is_finite() && v > 0.0 {
+        q.push(format!("{key}={}", (v * 100.0).round() / 100.0));
+    }
 }
 
 impl JobParams {
@@ -114,12 +131,28 @@ impl JobParams {
         if self.chunk_delay_ms > 0 {
             q.push(format!("chunkDelayMs={}", self.chunk_delay_ms));
         }
+        let i = &self.info;
+        if !i.name.is_empty() {
+            q.push(format!("name={}", encode_component(&i.name)));
+        }
+        push_num(&mut q, "width", i.width_mm);
+        push_num(&mut q, "height", i.height_mm);
+        push_num(&mut q, "seconds", i.estimated_seconds);
+        if let Some(s) = &i.settings {
+            q.push(format!("settings={}", encode_component(&s.to_string())));
+        }
         q.join("&")
     }
 
     /// Lenient: unknown keys and unparsable values are ignored.
     pub fn from_query(query: &str) -> Self {
         let mut p = Self::default();
+        let num = |v: &str| {
+            v.parse::<f64>()
+                .ok()
+                .filter(|x| x.is_finite() && *x >= 0.0)
+                .unwrap_or(0.0)
+        };
         for (k, v) in parse_query(query) {
             match k.as_str() {
                 "device" => p.device = v,
@@ -127,6 +160,11 @@ impl JobParams {
                 "flow" => p.flow = parse_flow(&v),
                 "chunkSize" => p.chunk_size = v.parse().unwrap_or(0),
                 "chunkDelayMs" => p.chunk_delay_ms = v.parse().unwrap_or(0),
+                "name" => p.info.name = v.chars().take(120).collect(),
+                "width" => p.info.width_mm = num(&v),
+                "height" => p.info.height_mm = num(&v),
+                "seconds" => p.info.estimated_seconds = num(&v),
+                "settings" => p.info.settings = serde_json::from_str(&v).ok(),
                 _ => {}
             }
         }
@@ -402,6 +440,9 @@ pub(crate) fn send(
                     Ok(RelayEvent::Done {
                         cancelled: true, ..
                     }) => return Ok(SendOutcome::Cancelled),
+                    Ok(RelayEvent::Queued { position, .. }) => {
+                        return Ok(SendOutcome::Queued { position });
+                    }
                     Ok(RelayEvent::Done { error, .. }) => {
                         return Err(error
                             .unwrap_or_else(|| "Le relais n'a pas pu envoyer le travail.".into()));
@@ -506,9 +547,19 @@ mod tests {
             flow: Some(Flow::None),
             chunk_size: 128,
             chunk_delay_ms: 5,
+            info: JobInfo {
+                name: "Logo « boulangerie » & co".into(),
+                width_mm: 230.5,
+                height_mm: 80.0,
+                estimated_seconds: 42.25,
+                settings: Some(serde_json::json!({"machine": {"protocol": "hpgl", "flipY": true}})),
+            },
         };
         let q = p.to_query();
-        assert!(!q.contains(' ') && !q.contains("/dev"), "{q}");
+        assert!(
+            !q.contains(' ') && !q.contains("/dev") && !q.contains('{'),
+            "{q}"
+        );
         assert_eq!(JobParams::from_query(&q), p);
         assert_eq!(
             JobParams::from_query("device=&baud=x&flow=zz&junk"),

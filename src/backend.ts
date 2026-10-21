@@ -192,12 +192,12 @@ async function mockSend(req: SendRequest): Promise<void> {
   let sent = 0;
   const step = () => {
     if (mockBus.cancel) {
-      mockBus.finished.forEach((f) => f({ ok: false, cancelled: true, error: null }));
+      mockBus.finished.forEach((f) => f({ ok: false, cancelled: true, error: null, queued: false, position: 0 }));
       return;
     }
     sent = Math.min(total, sent + Math.max(1, req.chunkSize));
     mockBus.progress.forEach((f) => f({ sent, total }));
-    if (sent >= total) mockBus.finished.forEach((f) => f({ ok: true, cancelled: false, error: null }));
+    if (sent >= total) mockBus.finished.forEach((f) => f({ ok: true, cancelled: false, error: null, queued: false, position: 0 }));
     else setTimeout(step, 30);
   };
   setTimeout(step, 30);
@@ -242,6 +242,8 @@ async function mock(cmd: string, args: Record<string, unknown>): Promise<unknown
         deviceError: null,
         ports: [{ name: "/dev/ttyUSB0", kind: "usb", description: "USB Serial", manufacturer: "1a86", vid: 0x1a86, pid: 0x7523 }],
         last: null,
+        mode: "queue",
+        queued: 0,
       } satisfies RelayStatus;
     }
     case "send_job":

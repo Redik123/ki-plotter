@@ -3,7 +3,7 @@
 import { backend, onJobFinished, onJobProgress, pickSaveFile } from "../../backend";
 import { toShape, type Store } from "../../model/doc";
 import { IDENTITY, mul, rectPath, scaleAt } from "../../model/geom";
-import type { Destination, JobResult, Move, PortInfo, Rect, RelayInfo, RelayStatus, Shape } from "../../model/types";
+import type { Destination, JobResult, Move, PortInfo, Rect, RelayInfo, Shape } from "../../model/types";
 import { DEFAULT_SETTINGS, persist, settings, type OutputKind } from "../../settings";
 import { fmtMm } from "../actions";
 import { checkbox, errorMessage, h, modal, numberField, select, toast } from "../dom";
@@ -419,43 +419,31 @@ export function openCutDialog(store: Store): void {
     spellcheck: false,
   });
   const relayState = h("p", { class: "hint" }, "");
-  const relayDeviceSel = h("select", {});
   let relayCheck = 0;
   const setRelayState = (text: string, kind: "ok" | "err" | "" = "") => {
     relayState.textContent = text;
     relayState.className = `hint relay-${kind || "info"}`;
-  };
-  const fillRelayDevices = (st: RelayStatus | null) => {
-    const cur = s.output.relayDevice;
-    const names = st?.ports.map((p) => p.name) ?? [];
-    relayDeviceSel.replaceChildren(
-      h("option", { value: "", selected: !cur }, st?.device ? `Automatique (${st.device})` : "Automatique"),
-      ...(st?.ports ?? []).map((p) =>
-        h("option", { value: p.name, selected: p.name === cur }, `${p.name}${p.description ? ` — ${p.description}` : ""}`),
-      ),
-      // Keep a device chosen earlier even if the Pi doesn't list it right now.
-      ...(cur && !names.includes(cur) ? [h("option", { value: cur, selected: true }, `${cur} (absent)`)] : []),
-    );
   };
   const checkRelay = async () => {
     const host = s.output.relayHost.trim();
     const gen = ++relayCheck;
     if (!host) {
       setRelayState("Indiquez l'adresse du Raspberry Pi, ou cliquez sur Rechercher.");
-      fillRelayDevices(null);
       return;
     }
     setRelayState("Connexion…");
     try {
       const st = await backend.relayStatus(host, s.output.relayPort);
       if (gen !== relayCheck) return;
-      fillRelayDevices(st);
+      const queue =
+        st.mode === "queue"
+          ? ` Les travaux attendent sur son écran qu'on lance la découpe${st.queued ? ` (${st.queued} en attente)` : ""}.`
+          : " Les travaux sont coupés dès leur arrivée.";
       if (st.deviceError) setRelayState(`Relais « ${st.name} » joignable, mais : ${st.deviceError}`, "err");
-      else if (st.busy) setRelayState(`Relais « ${st.name} » : une découpe est en cours.`, "err");
-      else setRelayState(`✓ Relais « ${st.name} » prêt — plotter sur ${st.device}`, "ok");
+      else if (st.busy) setRelayState(`Relais « ${st.name} » : une découpe est en cours.${queue}`, "err");
+      else setRelayState(`✓ Relais « ${st.name} » prêt — plotter sur ${st.device}.${queue}`, "ok");
     } catch (e) {
       if (gen !== relayCheck) return;
-      fillRelayDevices(null);
       setRelayState(errorMessage(e), "err");
     }
   };
@@ -493,10 +481,6 @@ export function openCutDialog(store: Store): void {
     persist();
     void checkRelay();
   });
-  relayDeviceSel.addEventListener("change", () => {
-    s.output.relayDevice = relayDeviceSel.value;
-    persist();
-  });
   const networkBox = h(
     "div",
     {},
@@ -504,15 +488,14 @@ export function openCutDialog(store: Store): void {
       h("button", { class: "icon", title: "Chercher le relais sur le réseau", onclick: () => void discover() }, "Rechercher")),
     relayState,
     found,
-    h("label", { class: "field" }, h("span", {}, "Port sur le Pi"), relayDeviceSel),
+    h("p", { class: "hint" }, "Le port, le débit et le contrôle de flux du plotter se règlent sur l'écran du Pi (ou sa page web)."),
   );
 
-  fillRelayDevices(null);
   let relayChecked = false;
   const showOutput = () => {
     const k = s.output.kind;
     serialBox.hidden = k !== "serial";
-    lineBox.hidden = k !== "serial" && k !== "network";
+    lineBox.hidden = k !== "serial";
     printerBox.hidden = k !== "printer";
     fileBox.hidden = k !== "file";
     networkBox.hidden = k !== "network";
@@ -605,6 +588,16 @@ export function openCutDialog(store: Store): void {
   };
   saveBtn.addEventListener("click", () => void savePlt());
 
+  /** What the Pi's screen calls this job: the project, else the first text. */
+  const jobName = (): string => {
+    if (testMode) return "Coupe test 25 mm";
+    const file = store.filePath?.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "");
+    const objs = onlySelection ? store.selected() : store.doc.objects;
+    const text = objs.find((o) => o.kind === "text");
+    const base = file || (text?.kind === "text" ? text.text.replace(/\s+/g, " ").trim().slice(0, 40) : "") || "Sans titre";
+    return onlySelection && file ? `${base} (sélection)` : base;
+  };
+
   const send = async () => {
     if (!job || sending) return;
     let destination: Destination;
@@ -623,9 +616,10 @@ export function openCutDialog(store: Store): void {
         kind: "network",
         host: s.output.relayHost.trim(),
         port: s.output.relayPort,
-        device: s.output.relayDevice,
-        baud: s.output.baud,
-        flow: s.output.flow,
+        // The relay's own settings (its screen) decide the line.
+        device: "",
+        baud: 0,
+        flow: null,
       };
     } else if (s.output.kind === "printer") {
       if (!s.output.printer) {
@@ -656,7 +650,15 @@ export function openCutDialog(store: Store): void {
       sendBtn.disabled = false;
       saveBtn.disabled = false;
       stopBtn.hidden = true;
-      if (f.ok) {
+      if (f.queued) {
+        progress.value = 1;
+        progressText.textContent = "En attente sur le Pi ✓";
+        toast(
+          f.position > 1
+            ? `Travail en attente sur le Pi (${f.position} dans la file). Lancez la découpe depuis son écran.`
+            : "Travail en attente sur le Pi. Lancez la découpe depuis son écran, une fois le vinyle en place.",
+        );
+      } else if (f.ok) {
         progress.value = 1;
         progressText.textContent = "Envoyé ✓";
         toast("Travail envoyé au plotter.");
@@ -669,7 +671,19 @@ export function openCutDialog(store: Store): void {
       }
     });
     try {
-      await backend.sendJob({ destination, data: job.data, chunkSize: s.output.chunkSize, chunkDelayMs: s.output.chunkDelayMs });
+      await backend.sendJob({
+        destination,
+        data: job.data,
+        chunkSize: s.output.chunkSize,
+        chunkDelayMs: s.output.chunkDelayMs,
+        info: {
+          name: jobName(),
+          widthMm: job.stats.bounds.w,
+          heightMm: job.stats.bounds.h,
+          estimatedSeconds: job.stats.estimatedSeconds,
+          settings: { cut: s.cut, machine: { ...s.machine, mediaWidth: store.doc.mediaWidth } },
+        },
+      });
     } catch (e) {
       unProgress();
       unFinished();

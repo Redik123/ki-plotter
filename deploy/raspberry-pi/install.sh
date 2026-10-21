@@ -36,8 +36,9 @@ if systemctl is-active --quiet ki-plotter-relay.service; then
   IP=$(hostname -I 2>/dev/null | awk '{print $1}')
   echo
   echo "Relais KI Plotter installé et démarré."
-  echo "  Page d'état : http://${IP:-<adresse du Pi>}:7870/   (ou http://$(hostname).local:7870/)"
+  echo "  Écran de contrôle : http://${IP:-<adresse du Pi>}:7870/   (ou http://$(hostname).local:7870/)"
   echo "  Dans KI Plotter : Découper > Envoyer vers « Raspberry Pi (réseau) » > Rechercher."
+  echo "  Écran tactile sur le Pi : sudo sh kiosk.sh (une fois son pilote installé)."
   echo
   /usr/local/bin/ki-plotter-relay --list-ports | sed 's/^/  Port détecté : /' || true
 else
