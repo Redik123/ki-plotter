@@ -1,0 +1,21 @@
+[package]
+name = "kp_link"
+version.workspace = true
+edition.workspace = true
+description = "Sends cut jobs to the cutter: serial port, Windows printer (RAW), file, KI Plotter relay (Raspberry Pi). Shared with the relay itself."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+# Interface broadcast addresses for relay discovery.
+if-addrs = "0.15"
+# Default feature `libudev` dropped: on Linux the sysfs scan still reports USB
+# VID/PID/product, and no native library is needed to cross-compile for the
+# Raspberry Pi. On Windows the USB port info comes from SetupAPI regardless.
+serialport = { version = "4.10", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+# winspool: EnumPrintersW, OpenPrinterW (needs Gdi for PRINTER_DEFAULTSW),
+# StartDocPrinterW / WritePrinter / ... for RAW jobs.
+windows = { version = "0.62", features = ["Win32_Graphics_Printing", "Win32_Graphics_Gdi"] }
+

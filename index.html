@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KI Plotter</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="toolbar"></header>
+      <div id="main">
+        <nav id="tools"></nav>
+        <div id="stage"><canvas id="canvas"></canvas></div>
+        <aside id="side"></aside>
+      </div>
+      <footer id="status">
+        <span id="st-cursor">—</span>
+        <span id="st-info"></span>
+        <span class="spacer"></span>
+        <span id="st-media"></span>
+        <span id="st-zoom"></span>
+      </footer>
+    </div>
+    <div id="toast"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

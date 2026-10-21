@@ -1,0 +1,22 @@
+[package]
+name = "kp_import"
+version.workspace = true
+edition.workspace = true
+description = "Importers for KI Plotter: system fonts and text outlines, SVG, DXF, PLT, bitmap tracing"
+
+[dependencies]
+kp_geom.workspace = true
+serde.workspace = true
+kurbo.workspace = true
+# SVG (svgz, <text> converted with the system fonts).
+usvg = "0.48"
+dxf = "0.6"
+# Text shaping (kerning, ligatures); re-exports ttf-parser.
+rustybuzz = "0.20"
+# Tracing engine behind vtracer, used directly (see trace.rs).
+visioncortex = "0.8"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp", "gif"] }
+base64 = "0.23"
+
+[dev-dependencies]
+serde_json.workspace = true

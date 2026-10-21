@@ -1,0 +1,14 @@
+[package]
+name = "kp_geom"
+version.workspace = true
+edition.workspace = true
+description = "Geometry and cut-job pipeline for KI Plotter (flattening, blade offset, ordering, HPGL/DMPL, weeding, tiling)"
+
+[dependencies]
+serde.workspace = true
+kurbo.workspace = true
+# Clipping of weeding lines by the union of the shapes.
+i_overlay = "9.1"
+
+[dev-dependencies]
+serde_json.workspace = true

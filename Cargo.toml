@@ -1,0 +1,19 @@
+[workspace]
+members = ["src-tauri", "crates/kp_geom", "crates/kp_import", "crates/kp_link", "crates/kp_relay"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+kp_geom.path = "crates/kp_geom"
+kp_import.path = "crates/kp_import"
+kp_link.path = "crates/kp_link"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+kurbo = "0.13"
+
+[profile.dev.package."*"]
+# Tracing and font shaping are painfully slow unoptimised.
+opt-level = 2

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+# Relay package for the Raspberry Pi (npm run build:pi) lands in dist/ too.
+target/
+src-tauri/gen/
+*.log

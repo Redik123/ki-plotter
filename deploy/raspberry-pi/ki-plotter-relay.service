@@ -1,0 +1,20 @@
+[Unit]
+Description=KI Plotter - relais réseau vers le plotter de découpe
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ki-plotter-relay --config /etc/ki-plotter-relay.conf
+Restart=always
+RestartSec=3
+# Utilisateur système temporaire, avec accès aux ports série (dialout)
+# et aux imprimantes USB (lp) seulement.
+DynamicUser=yes
+SupplementaryGroups=dialout lp
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

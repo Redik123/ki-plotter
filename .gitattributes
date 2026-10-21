@@ -1,0 +1,3 @@
+# Files copied to the Raspberry Pi must keep Unix line endings.
+*.sh text eol=lf
+deploy/raspberry-pi/** text eol=lf

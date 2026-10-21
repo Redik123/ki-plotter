@@ -1,0 +1,14 @@
+[package]
+name = "kp_relay"
+version.workspace = true
+edition.workspace = true
+description = "KI Plotter relay: runs on the Raspberry Pi wired to the cutter and receives cut jobs over the network"
+
+[[bin]]
+name = "ki-plotter-relay"
+path = "src/main.rs"
+
+[dependencies]
+kp_link.workspace = true
+serde.workspace = true
+serde_json.workspace = true
